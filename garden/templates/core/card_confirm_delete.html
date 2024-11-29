@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Delete {{ object.title|default:"Untitled Card" }} | {{ block.super }}{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <div class="card-header">
+            <h2>Delete Card</h2>
+        </div>
+
+        <form method="post" style="padding: var(--spacing-md);">
+            {% csrf_token %}
+            <p>Are you sure you want to delete "{{ object.title|default:"Untitled Card" }}"?</p>
+
+            <div style="margin-top: var(--spacing-md);">
+                <button type="submit" style="color: var(--color-error);">Delete</button>
+                <a href="{% url 'card_detail' slug_or_uuid=object.slug|default:object.id %}"
+                   style="margin-left: var(--spacing-md)">Cancel</a>
+            </div>
+        </form>
+    </div>
+{% endblock %}

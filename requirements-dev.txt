@@ -1,0 +1,11 @@
+-r requirements.txt
+
+djlint==1.36.2
+factory_boy==3.3.1
+Faker==33.1.0
+ipdb==0.13.13
+pytest==8.3.3
+pytest-cov==6.0.0
+pytest-django==4.9.0
+pytest-xdist==3.6.1
+ruff==0.8.0

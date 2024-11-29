@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}{{ object.title|default:"Untitled Card" }} | {{ block.super }}{% endblock %}
+
+{% block content %}
+    <article class="card">
+        <div class="card-header">
+            <h2>{{ object.title|default:"Untitled Card" }}</h2>
+            <p class="helptext">Created: {{ object.created_at|date:"M d, Y" }}</p>
+        </div>
+
+        <div style="padding: var(--spacing-md);">
+            {{ object.text|safe }}
+
+            {% if object.tags.exists %}
+                <div style="margin-top: var(--spacing-md);">
+                    <h3>Tags:</h3>
+                    <ul>
+                        {% for tag in object.tags.all %}
+                            <li>
+                                <a href="{% url 'card_detail' slug_or_uuid=tag.slug|default:tag.id %}">{{ tag.title|default:tag.id }}</a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="card-footer">
+            <a href="{% url 'card_update' slug_or_uuid=object.slug|default:object.id %}">Edit</a> |
+            <a href="{% url 'card_delete' slug_or_uuid=object.slug|default:object.id %}"
+               style="color: var(--color-error)">Delete</a>
+        </div>
+    </article>
+
+    {% if object.children.exists %}
+        <div class="card">
+            <div class="card-header">
+                <h3>Child Cards</h3>
+            </div>
+            <ul>
+                {% for child in object.children.all %}
+                    <li>
+                        <a href="{% url 'card_detail' slug_or_uuid=child.slug|default:child.id %}">
+                            {{ child.title|default:"Untitled Card" }}
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+{% endblock %}

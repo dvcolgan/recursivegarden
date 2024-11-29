@@ -1,0 +1,27 @@
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+extend-select = ["I", "S", "INT"]
+
+[tool.ruff.lint.per-file-ignores]
+"garden/settings/dev.py" = ["F403", "F405"]
+"garden/settings/prod.py" = ["F403", "F405"]
+"garden/settings/testing.py" = ["F403", "F405"]
+"garden/**/factories.py" = ["S311"]
+"garden/core/management/commands/create_demo_data.py" = ["S311"]
+"garden/**/test_*.py" = ["S608", "S101", "S106"]
+
+[tool.djlint]
+indent=4
+format_css=true
+profile="django"
+extend_exclude="htmlcov/,frontend/"
+max_blank_lines=1
+
+[tool.pytest.ini_options]
+python_files = "tests.py test_*.py *_tests.py"
+addopts = "--pythonwarnings error --numprocesses auto --fail-on-template-vars --durations=10 --showlocals --cov=garden --cov-report=term-missing --cov-report=html --cov-report=xml --cov-branch --ds=garden.settings.testing"
+
+[tool.coverage.run]
+relative_files = true

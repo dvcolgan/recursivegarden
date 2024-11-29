@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}Cards | {{ block.super }}{% endblock %}
+
+{% block content %}
+    {% for card in object_list %}
+        {% include 'cardbox/partials/card.html' %}
+    {% empty %}
+        <li>No cards found.</li>
+    {% endfor %}
+{% endblock %}

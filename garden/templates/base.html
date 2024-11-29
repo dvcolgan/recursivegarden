@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <title>
+            {% block title %}
+                Recursive Garden
+            {% endblock title %}
+        </title>
+
+        {% load static %}
+
+        <link rel="icon" type="image/x-icon" href="{% static 'img/favicon.ico' %}">
+
+        <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
+
+        <script src="{% static 'js/htmx.min.js' %}" defer></script>
+    </head>
+    <body hx-boost hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+
+        <header class="mb-4">
+            <nav class="navbar navbar-expand-lg navbar-light bg-light"
+                 x-data="{ open: false }">
+                <div class="container-fluid">
+                    <h2 class="navbar-brand">
+                        <a href="{% url 'card_list' %}">Cards</a>
+                    </h2>
+
+                    <button class="navbar-toggler" type="button" @click="open = !open">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+
+                    <div class="navbar-collapse" :class="{ 'show': open }" x-transition>
+                        <form method="get" class="d-flex ms-auto me-3">
+                            {{ filter.form.search }}
+                            <button class="btn btn-outline-success ms-2" type="submit">Search</button>
+                        </form>
+
+                        <a href="{% url 'card_create' %}" class="btn btn-primary">New Card</a>
+                    </div>
+                </div>
+            </nav>
+
+            {% block header %}
+            {% endblock header %}
+        </header>
+
+        <main>
+            {% block content %}
+            {% endblock content %}
+        </main>
+
+        <footer>
+            &copy; 2024 David Colgan
+        </footer>
+    </body>
+</html>
