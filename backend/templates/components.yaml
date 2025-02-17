@@ -1,0 +1,3 @@
+components:
+  card: 'zettle/card.html'
+  vue_widget: 'core/vue_widget.html'
