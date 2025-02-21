@@ -1,12 +1,12 @@
 <template>
-  <div class="min-h-screen bg-gray-500">
-    <header class="bg-white shadow-sm">
+  <div class="min-h-screen bg-green-700">
+    <header class="border-b-4 bg-green-900 shadow-sm">
       <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-        <h1 class="text-2xl font-semibold text-gray-900">Zettle Cards</h1>
+        <h1 class="text-stroke text-2xl font-semibold text-white">Zettle Cards</h1>
       </div>
     </header>
 
-    <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <main class="px-4 py-8 sm:px-6 lg:px-8">
       <!-- Loading State -->
       <div v-if="loading" class="py-8 text-center">
         <div class="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-gray-900"></div>
