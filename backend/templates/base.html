@@ -22,7 +22,6 @@
         {% block extra_js %}
         {% endblock extra_js %}
 
-        {% vite_asset 'frontend/main.ts' %}
         <script>window.CSRF_TOKEN = "{{ csrf_token }}"</script>
     </body>
 </html>

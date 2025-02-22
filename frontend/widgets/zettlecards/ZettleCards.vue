@@ -9,7 +9,7 @@
     <div
       class="absolute h-full w-full"
       :style="{
-        transform: `translate(${viewX}px, ${viewY}px) scale(${zoom})`,
+        transform: `translate(${viewPosition.x}px, ${viewPosition.y}px) scale(${viewPosition.zoom})`,
         transformOrigin: '0 0',
       }">
       <ZettleCard
@@ -41,17 +41,31 @@
       <!-- Debug Info -->
       <div
         class="pointer-events-auto absolute right-4 bottom-4 rounded-lg bg-white p-4 text-sm shadow-lg">
-        <div>Zoom: {{ zoom }}</div>
-        <div>View: {{ Math.round(viewX) }}, {{ Math.round(viewY) }}</div>
+        <div>Zoom: {{ viewPosition.zoom }}</div>
+        <div>View: {{ Math.round(viewPosition.x) }}, {{ Math.round(viewPosition.y) }}</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import ZettleCard from './ZettleCard.vue'
 import type { ZettleCardData } from './types'
+
+const route = useRoute()
+const router = useRouter()
+
+// Computed view position from route query
+const viewPosition = computed(() => ({
+  x: Number(route.query.x) || 0,
+  y: Number(route.query.y) || 0,
+  zoom: ZOOM_LEVELS.includes(Number(route.query.zoom)) ? Number(route.query.zoom) : 1,
+}))
+
+// Constants
+const ZOOM_LEVELS = [0.25, 0.5, 1, 2, 4]
 
 // State
 const cards = ref<ZettleCardData[]>([])
@@ -59,21 +73,17 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const container = ref<HTMLElement | null>(null)
 
-// View state
-const viewX = ref(0)
-const viewY = ref(0)
-const zoom = ref(1)
-const ZOOM_LEVELS = [0.25, 0.5, 1, 2, 4]
-
 // Dragging state
 const isDragging = ref(false)
-const dragStartX = ref(0)
-const dragStartY = ref(0)
-const dragStartViewX = ref(0)
-const dragStartViewY = ref(0)
+const dragStart = reactive({
+  x: 0,
+  y: 0,
+  viewX: 0,
+  viewY: 0,
+  cardX: 0,
+  cardY: 0,
+})
 const activeCard = ref<ZettleCardData | null>(null)
-const dragStartCardX = ref(0)
-const dragStartCardY = ref(0)
 
 // Get mouse position relative to container
 function getRelativeMousePosition(e: MouseEvent) {
@@ -91,10 +101,10 @@ function startPan(e: MouseEvent) {
 
   isDragging.value = true
   const { x, y } = getRelativeMousePosition(e)
-  dragStartX.value = x
-  dragStartY.value = y
-  dragStartViewX.value = viewX.value
-  dragStartViewY.value = viewY.value
+  dragStart.x = x
+  dragStart.y = y
+  dragStart.viewX = viewPosition.value.x
+  dragStart.viewY = viewPosition.value.y
 }
 
 // Card drag handling
@@ -102,10 +112,10 @@ function startDrag(e: MouseEvent, card: ZettleCardData) {
   isDragging.value = true
   activeCard.value = card
   const { x, y } = getRelativeMousePosition(e)
-  dragStartX.value = x
-  dragStartY.value = y
-  dragStartCardX.value = card.x
-  dragStartCardY.value = card.y
+  dragStart.x = x
+  dragStart.y = y
+  dragStart.cardX = card.x
+  dragStart.cardY = card.y
 }
 
 function handleMouseMove(e: MouseEvent) {
@@ -115,17 +125,28 @@ function handleMouseMove(e: MouseEvent) {
 
   if (activeCard.value) {
     // Card dragging - scale movement by zoom level
-    const dx = (x - dragStartX.value) / zoom.value
-    const dy = (y - dragStartY.value) / zoom.value
-    activeCard.value.x = dragStartCardX.value + dx
-    activeCard.value.y = dragStartCardY.value + dy
+    const dx = (x - dragStart.x) / viewPosition.value.zoom
+    const dy = (y - dragStart.y) / viewPosition.value.zoom
+    activeCard.value.x = dragStart.cardX + dx
+    activeCard.value.y = dragStart.cardY + dy
   } else {
     // Canvas panning
-    const dx = x - dragStartX.value
-    const dy = y - dragStartY.value
-    viewX.value = dragStartViewX.value + dx
-    viewY.value = dragStartViewY.value + dy
+    const dx = x - dragStart.x
+    const dy = y - dragStart.y
+    updateRouteQuery({
+      x: dragStart.viewX + dx,
+      y: dragStart.viewY + dy,
+    })
   }
+}
+
+function updateRouteQuery(updates: Partial<typeof viewPosition.value>) {
+  router.replace({
+    query: {
+      ...route.query,
+      ...updates,
+    },
+  })
 }
 
 async function handleMouseUp() {
@@ -152,22 +173,12 @@ async function handleMouseUp() {
 
   isDragging.value = false
   activeCard.value = null
-
-  updateURLState()
-}
-
-function updateURLState() {
-  const params = new URLSearchParams(window.location.search)
-  params.set('x', viewX.value.toString())
-  params.set('y', viewY.value.toString())
-  params.set('zoom', zoom.value.toString())
-  window.history.replaceState({}, '', `${window.location.pathname}?${params}`)
 }
 
 function handleZoom(e: WheelEvent) {
   if (!container.value) return
 
-  const oldZoom = zoom.value
+  const oldZoom = viewPosition.value.zoom
 
   // Calculate new zoom level
   const currentZoomIndex = ZOOM_LEVELS.indexOf(oldZoom)
@@ -183,31 +194,15 @@ function handleZoom(e: WheelEvent) {
   const { x: mouseX, y: mouseY } = getRelativeMousePosition(e)
 
   // Calculate the point to zoom around (in world space)
-  const worldX = (mouseX - viewX.value) / oldZoom
-  const worldY = (mouseY - viewY.value) / oldZoom
-
-  // Update zoom
-  zoom.value = newZoom
+  const worldX = (mouseX - viewPosition.value.x) / oldZoom
+  const worldY = (mouseY - viewPosition.value.y) / oldZoom
 
   // Update view position to zoom around mouse point
-  viewX.value = mouseX - worldX * newZoom
-  viewY.value = mouseY - worldY * newZoom
-
-  updateURLState()
-}
-
-function loadStateFromURL() {
-  const params = new URLSearchParams(window.location.search)
-  if (!params.has('x') && !params.has('y') && container.value) {
-    const rect = container.value.getBoundingClientRect()
-    viewX.value = rect.width / 2
-    viewY.value = rect.height / 2
-  } else {
-    viewX.value = Number(params.get('x')) || 0
-    viewY.value = Number(params.get('y')) || 0
-  }
-  zoom.value = Number(params.get('zoom')) || 1
-  if (!ZOOM_LEVELS.includes(zoom.value)) zoom.value = 1
+  updateRouteQuery({
+    zoom: newZoom,
+    x: mouseX - worldX * newZoom,
+    y: mouseY - worldY * newZoom,
+  })
 }
 
 const fetchCards = async () => {
@@ -228,7 +223,15 @@ const fetchCards = async () => {
 }
 
 onMounted(() => {
-  loadStateFromURL()
+  // Center the view if no coordinates are provided
+  if (!route.query.x && !route.query.y && container.value) {
+    const rect = container.value.getBoundingClientRect()
+    updateRouteQuery({
+      x: rect.width / 2,
+      y: rect.height / 2,
+      zoom: 1,
+    })
+  }
   fetchCards()
 })
 </script>

@@ -1,1 +1,3 @@
-<div class="w-full h-full" data-vue-widget="{{ widget_name }}"></div>
+{% load django_vite %}
+<div id="{{ widget_name }}-app" class="w-full h-full"></div>
+{% vite_asset 'frontend/widgets/'|add:widget_name|add:'/main.ts' %}

@@ -1,8 +1,32 @@
 import { defineConfig } from 'vite'
 import { fileURLToPath, URL } from 'url'
-
+import fs from 'fs'
+import path from 'path'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
+
+// Automatically discover all widget entries
+function getWidgetEntries() {
+  const widgetsDir = './frontend/widgets'
+  const entries: Record<string, string> = {
+    styles: './frontend/styles.css',
+  }
+
+  // Read all widget directories
+  fs.readdirSync(widgetsDir, { withFileTypes: true })
+    .filter((dirent) => dirent.isDirectory())
+    .forEach((dirent) => {
+      const widgetName = dirent.name
+      const mainPath = path.join(widgetsDir, widgetName, 'main.ts')
+
+      // Only add entry if main.ts exists
+      if (fs.existsSync(mainPath)) {
+        entries[widgetName] = mainPath
+      }
+    })
+
+  return entries
+}
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -13,10 +37,7 @@ export default defineConfig({
     outDir: './backend/static',
     emptyOutDir: true,
     rollupOptions: {
-      input: {
-        main: './frontend/main.ts',
-        styles: './frontend/styles.css',
-      },
+      input: getWidgetEntries(),
     },
   },
   plugins: [
