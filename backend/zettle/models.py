@@ -111,5 +111,9 @@ class ZettleCard(BaseModel):
             models.Index(fields=["content_type", "object_id"]),
         ]
 
+        verbose_name = "Zettle Card"
+        verbose_name_plural = "Zettle Cards"
+        ordering = ["-created_at"]
+
     def __str__(self):
-        return f"{self.title} ({self.get_card_type_display()})"
+        return f"{self.title or 'Untitled'} ({self.get_card_type_display()})"
