@@ -1,33 +1,44 @@
 <template>
-  <div class="min-h-screen bg-green-700">
-    <header class="border-b-4 bg-green-900 shadow-sm">
-      <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-        <h1 class="text-stroke text-2xl font-semibold text-white">Zettle Cards</h1>
-      </div>
-    </header>
+  <div
+    ref="container"
+    class="fixed inset-0 overflow-hidden bg-green-700"
+    @mousedown="startPan"
+    @mousemove="handleMouseMove"
+    @mouseup="handleMouseUp"
+    @wheel.prevent="handleZoom">
+    <div
+      class="relative h-full w-full"
+      :style="{
+        transform: `translate(${viewX}px, ${viewY}px) scale(${zoom})`,
+        transformOrigin: '0 0',
+      }">
+      <!-- Origin indicator (optional, for debugging) -->
+      <div class="absolute top-0 left-0 h-2 w-2 rounded-full bg-red-500" />
 
-    <main class="px-4 py-8 sm:px-6 lg:px-8">
-      <!-- Loading State -->
-      <div v-if="loading" class="py-8 text-center">
-        <div class="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-gray-900"></div>
-        <p class="mt-2 text-gray-600">Loading cards...</p>
-      </div>
+      <ZettleCard
+        v-for="card in cards"
+        :key="card.uuid"
+        :card="card"
+        :isDragging="isDragging && activeCard?.uuid === card.uuid"
+        @dragStart="startDrag($event, card)" />
+    </div>
 
-      <!-- Error State -->
-      <div v-else-if="error" class="rounded-md bg-red-50 p-4">
-        <div class="flex">
-          <div class="ml-3">
-            <h3 class="text-sm font-medium text-red-800">Error loading cards</h3>
-            <p class="mt-1 text-sm text-red-700">{{ error }}</p>
-          </div>
-        </div>
-      </div>
+    <!-- Loading State -->
+    <div v-if="loading" class="fixed top-4 right-4 rounded-lg bg-white p-4 shadow-lg">
+      <div
+        class="h-5 w-5 animate-spin rounded-full border-2 border-green-900 border-t-transparent"></div>
+    </div>
 
-      <!-- Cards Grid -->
-      <div v-else class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <ZettleCard v-for="card in cards" :key="card.uuid" :card="card" />
-      </div>
-    </main>
+    <!-- Error State -->
+    <div v-if="error" class="fixed top-4 right-4 rounded-lg bg-red-100 p-4 text-red-900 shadow-lg">
+      {{ error }}
+    </div>
+
+    <!-- Debug Info -->
+    <div class="fixed right-4 bottom-4 rounded-lg bg-white p-4 text-sm shadow-lg">
+      <div>Zoom: {{ zoom }}</div>
+      <div>View: {{ Math.round(viewX) }}, {{ Math.round(viewY) }}</div>
+    </div>
   </div>
 </template>
 
@@ -35,9 +46,150 @@
 import { ref, onMounted } from 'vue'
 import ZettleCard from './ZettleCard.vue'
 
-const cards = ref([])
+// State
+const cards = ref<ZettleCard[]>([])
 const loading = ref(true)
-const error = ref(null)
+const error = ref<string | null>(null)
+const container = ref<HTMLElement | null>(null)
+
+// View state
+const viewX = ref(0)
+const viewY = ref(0)
+const zoom = ref(1)
+const ZOOM_LEVELS = [0.25, 0.5, 1, 2, 4]
+
+// Dragging state
+const isDragging = ref(false)
+const dragStartX = ref(0)
+const dragStartY = ref(0)
+const dragStartViewX = ref(0)
+const dragStartViewY = ref(0)
+const activeCard = ref<ZettleCard | null>(null)
+const dragStartCardX = ref(0)
+const dragStartCardY = ref(0)
+
+// Pan handling
+function startPan(e: MouseEvent) {
+  if (activeCard.value) return
+
+  isDragging.value = true
+  dragStartX.value = e.clientX
+  dragStartY.value = e.clientY
+  dragStartViewX.value = viewX.value
+  dragStartViewY.value = viewY.value
+}
+
+// Card drag handling
+function startDrag(e: MouseEvent, card: ZettleCard) {
+  isDragging.value = true
+  activeCard.value = card
+  dragStartX.value = e.clientX
+  dragStartY.value = e.clientY
+  dragStartCardX.value = card.x
+  dragStartCardY.value = card.y
+}
+
+function handleMouseMove(e: MouseEvent) {
+  if (!isDragging.value) return
+
+  if (activeCard.value) {
+    // Card dragging - scale movement by zoom level
+    const dx = (e.clientX - dragStartX.value) / zoom.value
+    const dy = (e.clientY - dragStartY.value) / zoom.value
+    activeCard.value.x = dragStartCardX.value + dx
+    activeCard.value.y = dragStartCardY.value + dy
+  } else {
+    // Canvas panning
+    const dx = e.clientX - dragStartX.value
+    const dy = e.clientY - dragStartY.value
+    viewX.value = dragStartViewX.value + dx
+    viewY.value = dragStartViewY.value + dy
+  }
+}
+
+async function handleMouseUp() {
+  if (activeCard.value) {
+    try {
+      const response = await fetch(`/api/cards/${activeCard.value.uuid}/`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': window.CSRF_TOKEN,
+        },
+        body: JSON.stringify({
+          x: Math.round(activeCard.value.x),
+          y: Math.round(activeCard.value.y),
+        }),
+      })
+
+      if (!response.ok) throw new Error('Failed to update card position')
+    } catch (e) {
+      error.value = 'Failed to save card position'
+      console.error(e)
+    }
+  }
+
+  isDragging.value = false
+  activeCard.value = null
+
+  updateURLState()
+}
+
+function updateURLState() {
+  const params = new URLSearchParams(window.location.search)
+  params.set('x', viewX.value.toString())
+  params.set('y', viewY.value.toString())
+  params.set('zoom', zoom.value.toString())
+  window.history.replaceState({}, '', `${window.location.pathname}?${params}`)
+}
+
+function handleZoom(e: WheelEvent) {
+  if (!container.value) return
+
+  const oldZoom = zoom.value
+
+  // Calculate new zoom level
+  const currentZoomIndex = ZOOM_LEVELS.indexOf(oldZoom)
+  const newZoomIndex =
+    e.deltaY > 0
+      ? Math.max(0, currentZoomIndex - 1)
+      : Math.min(ZOOM_LEVELS.length - 1, currentZoomIndex + 1)
+  const newZoom = ZOOM_LEVELS[newZoomIndex]
+
+  if (newZoom === oldZoom) return
+
+  // Get mouse position relative to viewport
+  const rect = container.value.getBoundingClientRect()
+  const mouseX = e.clientX - rect.left
+  const mouseY = e.clientY - rect.top
+
+  // Calculate the point to zoom around (in world space)
+  const worldX = (mouseX - viewX.value) / oldZoom
+  const worldY = (mouseY - viewY.value) / oldZoom
+
+  // Update zoom
+  zoom.value = newZoom
+
+  // Update view position to zoom around mouse point
+  viewX.value = mouseX - worldX * newZoom
+  viewY.value = mouseY - worldY * newZoom
+
+  updateURLState()
+}
+
+function loadStateFromURL() {
+  const params = new URLSearchParams(window.location.search)
+  if (!params.has('x') && !params.has('y') && container.value) {
+    const rect = container.value.getBoundingClientRect()
+    viewX.value = rect.width / 2
+    viewY.value = rect.height / 2
+  } else {
+    viewX.value = Number(params.get('x')) || 0
+    viewY.value = Number(params.get('y')) || 0
+  }
+  zoom.value = Number(params.get('zoom')) || 1
+  if (!ZOOM_LEVELS.includes(zoom.value)) zoom.value = 1
+}
 
 const fetchCards = async () => {
   try {
@@ -49,7 +201,7 @@ const fetchCards = async () => {
     const data = await response.json()
     cards.value = data.results || data
   } catch (e) {
-    error.value = e.message
+    error.value = e instanceof Error ? e.message : 'Unknown error'
     console.error('Error fetching cards:', e)
   } finally {
     loading.value = false
@@ -57,6 +209,7 @@ const fetchCards = async () => {
 }
 
 onMounted(() => {
+  loadStateFromURL()
   fetchCards()
 })
 </script>
