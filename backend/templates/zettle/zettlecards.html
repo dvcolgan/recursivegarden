@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-    {% vue_widget widget_name="zettlecards" %}
+    <div class="flex flex-col h-screen bg-gray-100">
+        <div class="flex-1 h-full w-full ">{% vue_widget widget_name="zettlecards" %}</div>
+    </div>
 {% endblock content %}

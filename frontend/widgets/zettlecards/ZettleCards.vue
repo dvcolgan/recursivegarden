@@ -1,20 +1,17 @@
 <template>
   <div
     ref="container"
-    class="fixed inset-0 overflow-hidden bg-green-700"
+    class="relative h-full w-full overflow-hidden bg-green-700"
     @mousedown="startPan"
     @mousemove="handleMouseMove"
     @mouseup="handleMouseUp"
     @wheel.prevent="handleZoom">
     <div
-      class="relative h-full w-full"
+      class="absolute h-full w-full"
       :style="{
         transform: `translate(${viewX}px, ${viewY}px) scale(${zoom})`,
         transformOrigin: '0 0',
       }">
-      <!-- Origin indicator (optional, for debugging) -->
-      <div class="absolute top-0 left-0 h-2 w-2 rounded-full bg-red-500" />
-
       <ZettleCard
         v-for="card in cards"
         :key="card.uuid"
@@ -23,21 +20,30 @@
         @dragStart="startDrag($event, card)" />
     </div>
 
-    <!-- Loading State -->
-    <div v-if="loading" class="fixed top-4 right-4 rounded-lg bg-white p-4 shadow-lg">
+    <!-- Overlay container for UI elements -->
+    <div class="pointer-events-none absolute inset-0">
+      <!-- Loading State -->
       <div
-        class="h-5 w-5 animate-spin rounded-full border-2 border-green-900 border-t-transparent"></div>
-    </div>
+        v-if="loading"
+        class="pointer-events-auto absolute top-4 right-4 rounded-lg bg-white p-4 shadow-lg">
+        <div
+          class="h-5 w-5 animate-spin rounded-full border-2 border-green-900 border-t-transparent">
+        </div>
+      </div>
 
-    <!-- Error State -->
-    <div v-if="error" class="fixed top-4 right-4 rounded-lg bg-red-100 p-4 text-red-900 shadow-lg">
-      {{ error }}
-    </div>
+      <!-- Error State -->
+      <div
+        v-if="error"
+        class="pointer-events-auto absolute top-4 right-4 rounded-lg bg-red-100 p-4 text-red-900 shadow-lg">
+        {{ error }}
+      </div>
 
-    <!-- Debug Info -->
-    <div class="fixed right-4 bottom-4 rounded-lg bg-white p-4 text-sm shadow-lg">
-      <div>Zoom: {{ zoom }}</div>
-      <div>View: {{ Math.round(viewX) }}, {{ Math.round(viewY) }}</div>
+      <!-- Debug Info -->
+      <div
+        class="pointer-events-auto absolute right-4 bottom-4 rounded-lg bg-white p-4 text-sm shadow-lg">
+        <div>Zoom: {{ zoom }}</div>
+        <div>View: {{ Math.round(viewX) }}, {{ Math.round(viewY) }}</div>
+      </div>
     </div>
   </div>
 </template>
@@ -69,13 +75,24 @@ const activeCard = ref<ZettleCardData | null>(null)
 const dragStartCardX = ref(0)
 const dragStartCardY = ref(0)
 
+// Get mouse position relative to container
+function getRelativeMousePosition(e: MouseEvent) {
+  if (!container.value) return { x: 0, y: 0 }
+  const rect = container.value.getBoundingClientRect()
+  return {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top,
+  }
+}
+
 // Pan handling
 function startPan(e: MouseEvent) {
   if (activeCard.value) return
 
   isDragging.value = true
-  dragStartX.value = e.clientX
-  dragStartY.value = e.clientY
+  const { x, y } = getRelativeMousePosition(e)
+  dragStartX.value = x
+  dragStartY.value = y
   dragStartViewX.value = viewX.value
   dragStartViewY.value = viewY.value
 }
@@ -84,8 +101,9 @@ function startPan(e: MouseEvent) {
 function startDrag(e: MouseEvent, card: ZettleCardData) {
   isDragging.value = true
   activeCard.value = card
-  dragStartX.value = e.clientX
-  dragStartY.value = e.clientY
+  const { x, y } = getRelativeMousePosition(e)
+  dragStartX.value = x
+  dragStartY.value = y
   dragStartCardX.value = card.x
   dragStartCardY.value = card.y
 }
@@ -93,16 +111,18 @@ function startDrag(e: MouseEvent, card: ZettleCardData) {
 function handleMouseMove(e: MouseEvent) {
   if (!isDragging.value) return
 
+  const { x, y } = getRelativeMousePosition(e)
+
   if (activeCard.value) {
     // Card dragging - scale movement by zoom level
-    const dx = (e.clientX - dragStartX.value) / zoom.value
-    const dy = (e.clientY - dragStartY.value) / zoom.value
+    const dx = (x - dragStartX.value) / zoom.value
+    const dy = (y - dragStartY.value) / zoom.value
     activeCard.value.x = dragStartCardX.value + dx
     activeCard.value.y = dragStartCardY.value + dy
   } else {
     // Canvas panning
-    const dx = e.clientX - dragStartX.value
-    const dy = e.clientY - dragStartY.value
+    const dx = x - dragStartX.value
+    const dy = y - dragStartY.value
     viewX.value = dragStartViewX.value + dx
     viewY.value = dragStartViewY.value + dy
   }
@@ -159,10 +179,8 @@ function handleZoom(e: WheelEvent) {
 
   if (newZoom === oldZoom) return
 
-  // Get mouse position relative to viewport
-  const rect = container.value.getBoundingClientRect()
-  const mouseX = e.clientX - rect.left
-  const mouseY = e.clientY - rect.top
+  // Get mouse position relative to container
+  const { x: mouseX, y: mouseY } = getRelativeMousePosition(e)
 
   // Calculate the point to zoom around (in world space)
   const worldX = (mouseX - viewX.value) / oldZoom
