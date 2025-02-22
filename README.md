@@ -8,6 +8,7 @@ Recursive Garden is a dynamic knowledge management system that combines elements
 
 - **Recursive Note Organization**: Cards can be nested arbitrarily deep, allowing for complex knowledge hierarchies
 - **Multiple Organization Methods**:
+  - Spatial organization on an infinite 2D canvas
   - Parent-child relationships for hierarchical organization
   - Tagging for associative connections
   - Sequential ordering between cards
@@ -21,6 +22,7 @@ Recursive Garden is a dynamic knowledge management system that combines elements
 - **Speed First**: Every feature is implemented with performance in mind, ensuring near-instantaneous response times
 - **Productive Engagement**: Uses "hook" patterns (trigger → action → reward → investment) to encourage writing and knowledge organization
 - **Seamless Experience**: Smooth transitions between static and dynamic content
+- **Spatial Thinking**: Leverages human spatial memory by allowing notes to be organized in a 2D space
 
 ## Tech Stack
 
@@ -36,6 +38,7 @@ Recursive Garden is a dynamic knowledge management system that combines elements
 - TypeScript
 - Tailwind CSS
 - Vite build system
+- Transform-based infinite canvas
 
 ### Integration
 - Django Vite for backend/frontend integration
@@ -48,3 +51,5 @@ Recursive Garden is a dynamic knowledge management system that combines elements
 - Python 3.13 or higher
 - Node.js (Latest LTS version recommended)
 - PostgreSQL (optional, SQLite supported by default)
+
+See the [docs/](docs/) directory for detailed documentation on specific features.
