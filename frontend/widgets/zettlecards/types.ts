@@ -9,4 +9,5 @@ export interface ZettleCardData {
   votes?: number
   x: number
   y: number
+  parent?: string | null
 }

@@ -5,7 +5,8 @@
       transform: `translate(${card.x}px, ${card.y}px)`,
       cursor: isDragging ? 'grabbing' : 'grab',
     }"
-    @mousedown.stop="$emit('dragStart', $event)">
+    @mousedown.prevent="handleMouseDown"
+    @click.stop="handleClick">
     <!-- Card Type Badge -->
     <span
       class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize"
@@ -50,18 +51,23 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { ZettleCardData } from './types.ts'
+import type { ZettleCardData } from './types'
 
 const props = defineProps<{
   card: ZettleCardData
   isDragging?: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
+  click: [card: ZettleCardData]
   dragStart: [event: MouseEvent]
 }>()
 
 const hasImageError = ref(false)
+
+// Track if we're actually dragging vs just clicking
+const dragStartTime = ref(0)
+const dragStartPosition = ref({ x: 0, y: 0 })
 
 const cardTypeClasses = computed(
   () =>
@@ -73,6 +79,27 @@ const cardTypeClasses = computed(
       topic: 'bg-red-100 text-red-800',
     })[props.card.card_type]
 )
+
+function handleMouseDown(e: MouseEvent) {
+  dragStartTime.value = Date.now()
+  dragStartPosition.value = { x: e.clientX, y: e.clientY }
+  emit('dragStart', e)
+}
+
+function handleClick() {
+  // Only treat it as a click if:
+  // 1. Less than 200ms has passed
+  // 2. Mouse hasn't moved more than 3 pixels
+  const dragTime = Date.now() - dragStartTime.value
+  const dragDistance = Math.hypot(
+    dragStartPosition.value.x - window.mouseX,
+    dragStartPosition.value.y - window.mouseY
+  )
+
+  if (dragTime < 200 && dragDistance < 3) {
+    emit('click', props.card)
+  }
+}
 
 function handleImageError() {
   hasImageError.value = true

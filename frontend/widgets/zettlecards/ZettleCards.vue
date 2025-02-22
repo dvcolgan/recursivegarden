@@ -1,50 +1,73 @@
 <template>
-  <div
-    ref="container"
-    class="relative h-full w-full overflow-hidden bg-green-700"
-    @mousedown="startPan"
-    @mousemove="handleMouseMove"
-    @mouseup="handleMouseUp"
-    @wheel.prevent="handleZoom">
-    <div
-      class="absolute h-full w-full"
-      :style="{
-        transform: `translate(${viewPosition.x}px, ${viewPosition.y}px) scale(${viewPosition.zoom})`,
-        transformOrigin: '0 0',
-      }">
-      <ZettleCard
-        v-for="card in cards"
-        :key="card.uuid"
-        :card="card"
-        :isDragging="isDragging && activeCard?.uuid === card.uuid"
-        @dragStart="startDrag($event, card)" />
-    </div>
+  <div class="h-full w-full">
+    <!-- Header -->
+    <Header
+      :active-card="activeCard"
+      :breadcrumbs="breadcrumbs"
+      :card-count="displayedCards.length"
+      @navigate-up="navigateUp"
+      @navigate-to-root="navigateToRoot"
+      @navigate-to="navigateToCard" />
 
-    <!-- Overlay container for UI elements -->
-    <div class="pointer-events-none absolute inset-0">
-      <!-- Loading State -->
+    <!-- Main Content Area -->
+    <div
+      ref="container"
+      class="relative h-full w-full overflow-hidden bg-green-700"
+      :class="{ 'ml-72': activeCard }"
+      @mousedown="startPan"
+      @mousemove="handleMouseMove"
+      @mouseup="handleMouseUp"
+      @mouseleave="handleMouseUp"
+      @wheel.prevent="handleZoom">
       <div
-        v-if="loading"
-        class="pointer-events-auto absolute top-4 right-4 rounded-lg bg-white p-4 shadow-lg">
+        class="absolute h-full w-full"
+        :style="{
+          transform: `translate(${viewPosition.x}px, ${viewPosition.y}px) scale(${viewPosition.zoom})`,
+          transformOrigin: '0 0',
+        }">
+        <ZettleCard
+          v-for="card in displayedCards"
+          :key="card.uuid"
+          :card="card"
+          :isDragging="isDragging && draggedCard?.uuid === card.uuid"
+          @click="navigateToCard(card)"
+          @dragStart="startDrag($event, card)" />
+      </div>
+
+      <!-- Overlay container for UI elements -->
+      <div class="pointer-events-none absolute inset-0">
+        <!-- Loading State -->
         <div
-          class="h-5 w-5 animate-spin rounded-full border-2 border-green-900 border-t-transparent">
+          v-if="loading"
+          class="pointer-events-auto absolute top-4 right-4 rounded-lg bg-white p-4 shadow-lg">
+          <div
+            class="h-5 w-5 animate-spin rounded-full border-2 border-green-900 border-t-transparent">
+          </div>
+        </div>
+
+        <!-- Error State -->
+        <div
+          v-if="error"
+          class="pointer-events-auto absolute top-4 right-4 rounded-lg bg-red-100 p-4 text-red-900 shadow-lg">
+          {{ error }}
+        </div>
+
+        <!-- Debug Info -->
+        <div
+          class="pointer-events-auto absolute right-4 bottom-4 rounded-lg bg-white p-4 text-sm shadow-lg">
+          <div>Zoom: {{ viewPosition.zoom }}</div>
+          <div>View: {{ Math.round(viewPosition.x) }}, {{ Math.round(viewPosition.y) }}</div>
+          <div>Cards: {{ displayedCards.length }}</div>
         </div>
       </div>
-
-      <!-- Error State -->
-      <div
-        v-if="error"
-        class="pointer-events-auto absolute top-4 right-4 rounded-lg bg-red-100 p-4 text-red-900 shadow-lg">
-        {{ error }}
-      </div>
-
-      <!-- Debug Info -->
-      <div
-        class="pointer-events-auto absolute right-4 bottom-4 rounded-lg bg-white p-4 text-sm shadow-lg">
-        <div>Zoom: {{ viewPosition.zoom }}</div>
-        <div>View: {{ Math.round(viewPosition.x) }}, {{ Math.round(viewPosition.y) }}</div>
-      </div>
     </div>
+
+    <!-- Sidebar -->
+    <Sidebar
+      :active-card="activeCard"
+      :prev-card="prevCard"
+      :next-card="nextCard"
+      @navigate="navigateToCard" />
   </div>
 </template>
 
@@ -52,17 +75,16 @@
 import { ref, computed, onMounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ZettleCard from './ZettleCard.vue'
+import Header from './Header.vue'
+import Sidebar from './Sidebar.vue'
 import type { ZettleCardData } from './types'
+
+// Track mouse position globally
+window.mouseX = 0
+window.mouseY = 0
 
 const route = useRoute()
 const router = useRouter()
-
-// Computed view position from route query
-const viewPosition = computed(() => ({
-  x: Number(route.query.x) || 0,
-  y: Number(route.query.y) || 0,
-  zoom: ZOOM_LEVELS.includes(Number(route.query.zoom)) ? Number(route.query.zoom) : 1,
-}))
 
 // Constants
 const ZOOM_LEVELS = [0.25, 0.5, 1, 2, 4]
@@ -72,6 +94,43 @@ const cards = ref<ZettleCardData[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 const container = ref<HTMLElement | null>(null)
+
+// Navigation state
+const activeCard = ref<ZettleCardData | null>(null)
+const breadcrumbs = ref<ZettleCardData[]>([])
+
+// Computed view position from route query
+const viewPosition = computed(() => ({
+  x: Number(route.query.x) || 0,
+  y: Number(route.query.y) || 0,
+  zoom: ZOOM_LEVELS.includes(Number(route.query.zoom)) ? Number(route.query.zoom) : 1,
+}))
+
+// Filtered cards based on current context
+const displayedCards = computed(() => {
+  const parentUuid = route.query.parent as string | undefined
+  return cards.value.filter((card) => {
+    if (!parentUuid) {
+      // In root view, show only cards without parents
+      return !card.parent
+    }
+    // In focused view, show only direct children of current parent
+    return card.parent === parentUuid
+  })
+})
+
+// Navigation helpers
+const prevCard = computed(() => {
+  if (!activeCard.value) return null
+  const index = displayedCards.value.findIndex((c) => c.uuid === activeCard.value?.uuid)
+  return index > 0 ? displayedCards.value[index - 1] : null
+})
+
+const nextCard = computed(() => {
+  if (!activeCard.value) return null
+  const index = displayedCards.value.findIndex((c) => c.uuid === activeCard.value?.uuid)
+  return index < displayedCards.value.length - 1 ? displayedCards.value[index + 1] : null
+})
 
 // Dragging state
 const isDragging = ref(false)
@@ -83,7 +142,46 @@ const dragStart = reactive({
   cardX: 0,
   cardY: 0,
 })
-const activeCard = ref<ZettleCardData | null>(null)
+const draggedCard = ref<ZettleCardData | null>(null)
+
+// Navigation functions
+async function navigateToCard(card: ZettleCardData) {
+  updateRouteQuery({ parent: card.uuid })
+  await fetchCards()
+  activeCard.value = card
+  await updateBreadcrumbs(card)
+}
+
+async function navigateUp() {
+  if (!activeCard.value?.parent) {
+    navigateToRoot()
+    return
+  }
+  const response = await fetch(`/api/cards/${activeCard.value.parent}/`)
+  const parentCard = await response.json()
+  navigateToCard(parentCard)
+}
+
+function navigateToRoot() {
+  updateRouteQuery({ parent: undefined })
+  fetchCards()
+  activeCard.value = null
+  breadcrumbs.value = []
+}
+
+async function updateBreadcrumbs(card: ZettleCardData) {
+  const crumbs: ZettleCardData[] = [card]
+  let current = card
+
+  while (current.parent) {
+    const response = await fetch(`/api/cards/${current.parent}/`)
+    const parentCard = await response.json()
+    crumbs.unshift(parentCard)
+    current = parentCard
+  }
+
+  breadcrumbs.value = crumbs
+}
 
 // Get mouse position relative to container
 function getRelativeMousePosition(e: MouseEvent) {
@@ -97,7 +195,7 @@ function getRelativeMousePosition(e: MouseEvent) {
 
 // Pan handling
 function startPan(e: MouseEvent) {
-  if (activeCard.value) return
+  if (draggedCard.value) return
 
   isDragging.value = true
   const { x, y } = getRelativeMousePosition(e)
@@ -110,7 +208,7 @@ function startPan(e: MouseEvent) {
 // Card drag handling
 function startDrag(e: MouseEvent, card: ZettleCardData) {
   isDragging.value = true
-  activeCard.value = card
+  draggedCard.value = card
   const { x, y } = getRelativeMousePosition(e)
   dragStart.x = x
   dragStart.y = y
@@ -119,16 +217,20 @@ function startDrag(e: MouseEvent, card: ZettleCardData) {
 }
 
 function handleMouseMove(e: MouseEvent) {
+  // Update global mouse position
+  window.mouseX = e.clientX
+  window.mouseY = e.clientY
+
   if (!isDragging.value) return
 
   const { x, y } = getRelativeMousePosition(e)
 
-  if (activeCard.value) {
+  if (draggedCard.value) {
     // Card dragging - scale movement by zoom level
     const dx = (x - dragStart.x) / viewPosition.value.zoom
     const dy = (y - dragStart.y) / viewPosition.value.zoom
-    activeCard.value.x = dragStart.cardX + dx
-    activeCard.value.y = dragStart.cardY + dy
+    draggedCard.value.x = dragStart.cardX + dx
+    draggedCard.value.y = dragStart.cardY + dy
   } else {
     // Canvas panning
     const dx = x - dragStart.x
@@ -140,7 +242,7 @@ function handleMouseMove(e: MouseEvent) {
   }
 }
 
-function updateRouteQuery(updates: Partial<typeof viewPosition.value>) {
+function updateRouteQuery(updates: Partial<typeof viewPosition.value & { parent?: string }>) {
   router.replace({
     query: {
       ...route.query,
@@ -150,17 +252,17 @@ function updateRouteQuery(updates: Partial<typeof viewPosition.value>) {
 }
 
 async function handleMouseUp() {
-  if (activeCard.value) {
+  if (draggedCard.value) {
     try {
-      const response = await fetch(`/api/cards/${activeCard.value.uuid}/`, {
+      const response = await fetch(`/api/cards/${draggedCard.value.uuid}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'X-CSRFToken': window.CSRF_TOKEN,
         },
         body: JSON.stringify({
-          x: Math.round(activeCard.value.x),
-          y: Math.round(activeCard.value.y),
+          x: Math.round(draggedCard.value.x),
+          y: Math.round(draggedCard.value.y),
         }),
       })
 
@@ -172,7 +274,7 @@ async function handleMouseUp() {
   }
 
   isDragging.value = false
-  activeCard.value = null
+  draggedCard.value = null
 }
 
 function handleZoom(e: WheelEvent) {
@@ -205,15 +307,27 @@ function handleZoom(e: WheelEvent) {
   })
 }
 
+// Fetch cards with optional parent filter
 const fetchCards = async () => {
   try {
     loading.value = true
-    const response = await fetch('/api/cards/')
+    const url = new URL('/api/cards/', window.location.origin)
+    const response = await fetch(url)
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
     const data = await response.json()
     cards.value = data.results || data
+
+    // If we're focusing on a card, make sure it's in our card list
+    const parentUuid = route.query.parent as string | undefined
+    if (parentUuid && !cards.value.find((c) => c.uuid === parentUuid)) {
+      const parentResponse = await fetch(`/api/cards/${parentUuid}/`)
+      if (parentResponse.ok) {
+        const parentCard = await parentResponse.json()
+        cards.value = [parentCard, ...cards.value]
+      }
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Unknown error'
     console.error('Error fetching cards:', e)
@@ -222,7 +336,8 @@ const fetchCards = async () => {
   }
 }
 
-onMounted(() => {
+// Initialize
+onMounted(async () => {
   // Center the view if no coordinates are provided
   if (!route.query.x && !route.query.y && container.value) {
     const rect = container.value.getBoundingClientRect()
@@ -232,6 +347,16 @@ onMounted(() => {
       zoom: 1,
     })
   }
+
+  // Load initial card if parent parameter is present
+  const parentUuid = route.query.parent as string
+  if (parentUuid) {
+    const response = await fetch(`/api/cards/${parentUuid}/`)
+    const card = await response.json()
+    activeCard.value = card
+    await updateBreadcrumbs(card)
+  }
+
   fetchCards()
 })
 </script>
