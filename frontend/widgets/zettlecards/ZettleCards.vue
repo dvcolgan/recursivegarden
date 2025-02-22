@@ -45,9 +45,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import ZettleCard from './ZettleCard.vue'
+import type { ZettleCardData } from './types'
 
 // State
-const cards = ref<ZettleCard[]>([])
+const cards = ref<ZettleCardData[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 const container = ref<HTMLElement | null>(null)
@@ -64,7 +65,7 @@ const dragStartX = ref(0)
 const dragStartY = ref(0)
 const dragStartViewX = ref(0)
 const dragStartViewY = ref(0)
-const activeCard = ref<ZettleCard | null>(null)
+const activeCard = ref<ZettleCardData | null>(null)
 const dragStartCardX = ref(0)
 const dragStartCardY = ref(0)
 
@@ -80,7 +81,7 @@ function startPan(e: MouseEvent) {
 }
 
 // Card drag handling
-function startDrag(e: MouseEvent, card: ZettleCard) {
+function startDrag(e: MouseEvent, card: ZettleCardData) {
   isDragging.value = true
   activeCard.value = card
   dragStartX.value = e.clientX
